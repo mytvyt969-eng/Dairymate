@@ -14,7 +14,6 @@ import {
   Calculator,
   CalendarCheck,
   CalendarX,
-  Smartphone,
 } from 'lucide-react';
 import {
   AttendanceStatus,
@@ -34,7 +33,6 @@ import { AttendanceCalendar } from './components/AttendanceCalendar';
 import { DayAttendanceEditor } from './components/DayAttendanceEditor';
 import { MonthlyBillLedger } from './components/MonthlyBillLedger';
 import { VendorRateSettings } from './components/VendorRateSettings';
-import { AndroidApkInstallView } from './components/AndroidApkInstallView';
 
 const STORAGE_KEY_RECORDS = 'dairymate_records_v1';
 const STORAGE_KEY_SETTINGS = 'dairymate_settings_v1';
@@ -56,9 +54,7 @@ const TODAY_DAY = 11;
 const TODAY_DATE_KEY = formatDateKey(TODAY_YEAR, TODAY_MONTH, TODAY_DAY);
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'attendance' | 'ledger' | 'settings' | 'apk'>(
-    'attendance'
-  );
+  const [activeTab, setActiveTab] = useState<'attendance' | 'ledger' | 'settings'>('attendance');
   const [currentYear, setCurrentYear] = useState<number>(TODAY_YEAR);
   const [currentMonth, setCurrentMonth] = useState<number>(TODAY_MONTH);
   const [selectedDate, setSelectedDate] = useState<string>(TODAY_DATE_KEY);
@@ -308,27 +304,16 @@ export default function App() {
           >
             Rate & Vendor
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('apk')}
-            className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-              activeTab === 'apk'
-                ? 'border-emerald-600 text-slate-900 font-semibold'
-                : 'border-transparent hover:text-slate-900'
-            }`}
-          >
-            Android APK
-          </button>
         </nav>
 
         {/* Zone 3: 1 primary action */}
         <div className="flex items-center shrink-0">
           <button
             type="button"
-            onClick={() => setActiveTab('apk')}
+            onClick={() => handleQuickMarkToday('purchased')}
             className="min-h-[40px] px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors whitespace-nowrap shrink-0"
           >
-            Get Android APK
+            Mark Today Purchased
           </button>
         </div>
       </header>
@@ -566,14 +551,12 @@ export default function App() {
             onResetDemoData={handleResetDemoData}
           />
         )}
-
-        {activeTab === 'apk' && <AndroidApkInstallView />}
       </main>
 
       {/* Fixed Bottom Navigation Tab Bar for Android / Mobile Viewports (< md) */}
       <nav
         aria-label="Mobile Bottom Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 grid grid-cols-4 items-center h-14 px-2"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 grid grid-cols-3 items-center h-14 px-2"
       >
         <button
           type="button"
@@ -617,21 +600,6 @@ export default function App() {
           <Settings className="w-5 h-5" />
           <span className="text-[11px] tracking-tight mt-0.5 whitespace-nowrap">
             Milk Price
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('apk')}
-          className={`min-h-[44px] flex flex-col items-center justify-center rounded-xl transition-colors ${
-            activeTab === 'apk'
-              ? 'text-emerald-700 font-semibold'
-              : 'text-slate-500 hover:text-slate-900'
-          }`}
-        >
-          <Smartphone className="w-5 h-5" />
-          <span className="text-[11px] tracking-tight mt-0.5 whitespace-nowrap">
-            Android APK
           </span>
         </button>
       </nav>
