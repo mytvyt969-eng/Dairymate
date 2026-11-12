@@ -10,7 +10,7 @@ on:
 jobs:
   build-android-apk:
     name: Compile DairyMate Android APK
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout Repository
@@ -20,7 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
 
       - name: Setup Java JDK 21 (for Android Gradle)
         uses: actions/setup-java@v4
@@ -28,10 +27,13 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install Dependencies & Capacitor Android
         run: |
-          npm install
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install --legacy-peer-deps
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
 
       - name: Build Production Web Bundle
         run: npm run build
@@ -47,7 +49,7 @@ jobs:
         working-directory: ./android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
       - name: Rename APK for Easy Download
         run: |
