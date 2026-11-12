@@ -1,0 +1,9 @@
+{
+  "appId": "com.dairymate.attendance",
+  "appName": "DairyMate",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}
