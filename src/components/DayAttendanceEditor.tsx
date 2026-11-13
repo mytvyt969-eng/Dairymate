@@ -428,11 +428,7 @@ export const DayAttendanceEditor: React.FC<DayAttendanceEditorProps> = ({
           className="w-full min-h-[48px] px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors active:scale-[0.99]"
         >
           <Save className="w-4 h-4" />
-          <span>
-            {savedFeedback
-              ? 'Saved Entry'
-              : `Save ${formattedDateHeading.split(',')[1]?.trim() || 'Day'} Entry`}
-          </span>
+          <span>{savedFeedback ? 'Saved' : 'Save Changes'}</span>
         </button>
       </form>
     </aside>

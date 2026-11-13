@@ -47,10 +47,31 @@ export interface CalendarCell {
   record?: MilkRecord;
 }
 
+export interface TodayDateInfo {
+  year: number;
+  month: number; // 0-indexed
+  day: number;
+  dateKey: string; // YYYY-MM-DD
+  formattedLabel: string; // e.g. "Nov 13, 2026"
+}
+
 export function formatDateKey(year: number, month: number, day: number): string {
   const m = String(month + 1).padStart(2, '0');
   const d = String(day).padStart(2, '0');
   return `${year}-${m}-${d}`;
+}
+
+export function getTodayDateInfo(now: Date = new Date()): TodayDateInfo {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const day = now.getDate();
+  const dateKey = formatDateKey(year, month, day);
+  const formattedLabel = now.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  return { year, month, day, dateKey, formattedLabel };
 }
 
 export function parseDateKey(dateKey: string): { year: number; month: number; day: number } {
@@ -60,6 +81,20 @@ export function parseDateKey(dateKey: string): { year: number; month: number; da
 
 export function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
+}
+
+export function getMaxFillDayForMonth(
+  year: number,
+  month: number,
+  today: TodayDateInfo
+): number {
+  if (year < today.year || (year === today.year && month < today.month)) {
+    return getDaysInMonth(year, month);
+  }
+  if (year === today.year && month === today.month) {
+    return today.day;
+  }
+  return 0;
 }
 
 export function calculateRecordTotalLiters(record: MilkRecord): number {
@@ -316,10 +351,11 @@ export function generateCSVExport(
 export function createInitialSeedData(
   year: number,
   month: number,
-  settings: MilkSettings
+  settings: MilkSettings,
+  maxDay: number = 11
 ): Record<string, MilkRecord> {
   const map: Record<string, MilkRecord> = {};
-  // Seed first 11 days of the current month with realistic purchased and absent days
+  // Seed up to maxDay of the current month with realistic purchased and absent days
   const samplePattern: Array<{
     day: number;
     status: AttendanceStatus;
@@ -339,10 +375,11 @@ export function createInitialSeedData(
     { day: 8, status: 'purchased', morning: 1.5, evening: 0, note: 'Skipped evening slot' },
     { day: 9, status: 'absent', morning: 0, evening: 0, note: 'Vendor holiday / Absent' },
     { day: 10, status: 'purchased', morning: 1.5, evening: 0.5, extraCost: 90, extraNote: 'Paneer 250g' },
-    { day: 11, status: 'purchased', morning: 1.5, evening: 0.5, note: "Today's morning + evening delivery" },
+    { day: 11, status: 'purchased', morning: 1.5, evening: 0.5, note: 'Morning + evening delivery' },
   ];
 
   for (const item of samplePattern) {
+    if (item.day > maxDay) continue;
     const key = formatDateKey(year, month, item.day);
     map[key] = {
       date: key,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, X, Share2, Download, Copy, CheckCheck, Calculator } from 'lucide-react';
+import { Check, X, Download, Copy, CheckCheck, Calculator } from 'lucide-react';
 import {
   AttendanceStatus,
   MilkRecord,

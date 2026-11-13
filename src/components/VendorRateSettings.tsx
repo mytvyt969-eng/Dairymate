@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, RotateCcw, Smartphone, CheckCircle2 } from 'lucide-react';
+import { Save, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { MilkSettings } from '../utils/milkCalculations';
 
 interface VendorRateSettingsProps {
@@ -54,18 +54,24 @@ export const VendorRateSettings: React.FC<VendorRateSettingsProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div className="max-w-3xl mx-auto">
       <section
         aria-label="Milk Price and Vendor Settings"
-        className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs"
+        className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs"
       >
-        <div className="pb-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-            Milk Price & Default Quantity Settings
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Configure your daily milk rate per liter, default morning/evening liters, and vendor profile
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+              Milk Price & Default Quantity Settings
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Configure your daily milk rate per liter, default morning/evening liters, and vendor profile
+            </p>
+          </div>
+          <div className="text-xs font-mono tabular-nums text-emerald-700 font-semibold">
+            Daily default: {currencySymbol}
+            {((defaultMorningLiters + defaultEveningLiters) * defaultPricePerLiter).toFixed(2)}/day
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -253,56 +259,6 @@ export const VendorRateSettings: React.FC<VendorRateSettingsProps> = ({
           </div>
         </form>
       </section>
-
-      {/* Android & Daily Usage Guide Card */}
-      <aside className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col justify-between space-y-4">
-        <div>
-          <div className="flex items-center gap-2 text-slate-900 font-bold text-base">
-            <Smartphone className="w-5 h-5 text-emerald-600" />
-            <h3>Daily Milk & Attendance Guide</h3>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Designed for one-handed Android mobile usage and desktop household bookkeeping.
-          </p>
-
-          <ol className="mt-4 divide-y divide-slate-100 text-xs text-slate-700">
-            <li className="py-3">
-              <strong className="font-semibold text-slate-900 block mb-0.5">
-                01. One-Tap Daily Attendance
-              </strong>
-              Use the top quick bar or switch calendar mode to <em>Present</em> or{' '}
-              <em>Absent</em> to log days with a single tap.
-            </li>
-            <li className="py-3">
-              <strong className="font-semibold text-slate-900 block mb-0.5">
-                02. Morning & Evening Shift Quantities
-              </strong>
-              Need extra milk for guests or skipped the evening shift? Select any date to adjust
-              Morning and Evening liters independently.
-            </li>
-            <li className="py-3">
-              <strong className="font-semibold text-slate-900 block mb-0.5">
-                03. Automatic Absent Savings
-              </strong>
-              Whenever you mark a day as <em>Absent</em>, DairyMate sets the day cost to{' '}
-              {currencySymbol}0 and calculates how much money you saved on skipped deliveries.
-            </li>
-          </ol>
-        </div>
-
-        <div className="pt-4 border-t border-slate-100 text-xs text-slate-700 font-mono tabular-nums">
-          <div className="font-semibold text-slate-900 mb-1">Current Daily Default Estimate:</div>
-          <div>
-            ({defaultMorningLiters}L Morning + {defaultEveningLiters}L Evening) × {currencySymbol}
-            {defaultPricePerLiter}/L ={' '}
-            <strong className="text-emerald-700">
-              {currencySymbol}
-              {((defaultMorningLiters + defaultEveningLiters) * defaultPricePerLiter).toFixed(2)} /
-              day
-            </strong>
-          </div>
-        </div>
-      </aside>
     </div>
   );
 };

@@ -19,6 +19,7 @@ import {
   AttendanceStatus,
   MilkRecord,
   MilkSettings,
+  TodayDateInfo,
   buildCalendarGrid,
   calculateMonthlySummary,
   calculateRecordTotalCost,
@@ -27,6 +28,8 @@ import {
   createRecordFromDefaults,
   formatDateKey,
   getDaysInMonth,
+  getMaxFillDayForMonth,
+  getTodayDateInfo,
   parseDateKey,
 } from './utils/milkCalculations';
 import { AttendanceCalendar } from './components/AttendanceCalendar';
@@ -47,20 +50,48 @@ const DEFAULT_SETTINGS: MilkSettings = {
   defaultEveningLiters: 0.5,
 };
 
-// Fixed reference "today" matching current local context (Nov 11, 2026)
-const TODAY_YEAR = 2026;
-const TODAY_MONTH = 10; // 0-indexed -> November
-const TODAY_DAY = 11;
-const TODAY_DATE_KEY = formatDateKey(TODAY_YEAR, TODAY_MONTH, TODAY_DAY);
-
 export default function App() {
+  const [todayInfo, setTodayInfo] = useState<TodayDateInfo>(() => getTodayDateInfo());
   const [activeTab, setActiveTab] = useState<'attendance' | 'ledger' | 'settings'>('attendance');
-  const [currentYear, setCurrentYear] = useState<number>(TODAY_YEAR);
-  const [currentMonth, setCurrentMonth] = useState<number>(TODAY_MONTH);
-  const [selectedDate, setSelectedDate] = useState<string>(TODAY_DATE_KEY);
+  const [currentYear, setCurrentYear] = useState<number>(() => todayInfo.year);
+  const [currentMonth, setCurrentMonth] = useState<number>(() => todayInfo.month);
+  const [selectedDate, setSelectedDate] = useState<string>(() => todayInfo.dateKey);
   const [quickMode, setQuickMode] = useState<'inspect' | 'mark_purchased' | 'mark_absent'>(
     'inspect'
   );
+
+  // Keep todayInfo synced with the device clock when resuming app or crossing midnight
+  useEffect(() => {
+    const syncToday = () => {
+      const latest = getTodayDateInfo();
+      if (latest.dateKey === todayInfo.dateKey) return;
+      const prevKey = todayInfo.dateKey;
+      const prevYear = todayInfo.year;
+      const prevMonth = todayInfo.month;
+      setTodayInfo(latest);
+      setSelectedDate((sel) => (sel === prevKey ? latest.dateKey : sel));
+      if (currentYear === prevYear && currentMonth === prevMonth) {
+        setCurrentYear(latest.year);
+        setCurrentMonth(latest.month);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncToday();
+      }
+    };
+
+    const intervalId = window.setInterval(syncToday, 60_000);
+    window.addEventListener('focus', syncToday);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', syncToday);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [todayInfo, currentYear, currentMonth]);
 
   const [settings, setSettings] = useState<MilkSettings>(() => {
     try {
@@ -86,7 +117,7 @@ export default function App() {
     } catch {
       // ignore storage errors
     }
-    return createInitialSeedData(TODAY_YEAR, TODAY_MONTH, DEFAULT_SETTINGS);
+    return createInitialSeedData(todayInfo.year, todayInfo.month, DEFAULT_SETTINGS, todayInfo.day);
   });
 
   useEffect(() => {
@@ -116,11 +147,11 @@ export default function App() {
   );
 
   const calendarCells = useMemo(
-    () => buildCalendarGrid(currentYear, currentMonth, recordsMap, TODAY_DATE_KEY),
-    [currentYear, currentMonth, recordsMap]
+    () => buildCalendarGrid(currentYear, currentMonth, recordsMap, todayInfo.dateKey),
+    [currentYear, currentMonth, recordsMap, todayInfo.dateKey]
   );
 
-  const todayRecord = recordsMap[TODAY_DATE_KEY];
+  const todayRecord = recordsMap[todayInfo.dateKey];
   const todayStatus: AttendanceStatus = todayRecord?.status || 'unmarked';
 
   const handlePrevMonth = () => {
@@ -188,10 +219,12 @@ export default function App() {
   };
 
   const handleQuickMarkToday = (status: 'purchased' | 'absent') => {
-    setCurrentYear(TODAY_YEAR);
-    setCurrentMonth(TODAY_MONTH);
-    setSelectedDate(TODAY_DATE_KEY);
-    const nextRec = createRecordFromDefaults(TODAY_DATE_KEY, status, settings, {
+    const liveToday = getTodayDateInfo();
+    setTodayInfo(liveToday);
+    setCurrentYear(liveToday.year);
+    setCurrentMonth(liveToday.month);
+    setSelectedDate(liveToday.dateKey);
+    const nextRec = createRecordFromDefaults(liveToday.dateKey, status, settings, {
       note:
         status === 'purchased'
           ? "Today's milk purchased"
@@ -201,11 +234,10 @@ export default function App() {
   };
 
   const handleMarkAllUpToToday = () => {
-    const totalDays = getDaysInMonth(currentYear, currentMonth);
-    const maxDay =
-      currentYear === TODAY_YEAR && currentMonth === TODAY_MONTH
-        ? TODAY_DAY
-        : totalDays;
+    const liveToday = getTodayDateInfo();
+    setTodayInfo(liveToday);
+    const maxDay = getMaxFillDayForMonth(currentYear, currentMonth, liveToday);
+    if (maxDay <= 0) return;
 
     setRecordsMap((prev) => {
       const next = { ...prev };
@@ -243,18 +275,20 @@ export default function App() {
   };
 
   const handleResetDemoData = () => {
-    const seeded = createInitialSeedData(TODAY_YEAR, TODAY_MONTH, settings);
+    const liveToday = getTodayDateInfo();
+    setTodayInfo(liveToday);
+    const seeded = createInitialSeedData(liveToday.year, liveToday.month, settings, liveToday.day);
     setRecordsMap(seeded);
-    setCurrentYear(TODAY_YEAR);
-    setCurrentMonth(TODAY_MONTH);
-    setSelectedDate(TODAY_DATE_KEY);
+    setCurrentYear(liveToday.year);
+    setCurrentMonth(liveToday.month);
+    setSelectedDate(liveToday.dateKey);
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900 pb-20 md:pb-8">
-      {/* Top Bar Contract: 3 zones separated by gap-8 */}
+      {/* Top Bar: Clean Brand + Primary Navigation */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-8 h-14 flex items-center justify-between gap-8">
-        {/* Zone 1: Single text element wordmark */}
+        {/* Brand Wordmark */}
         <a
           href="#top"
           onClick={(e) => {
@@ -266,7 +300,7 @@ export default function App() {
           DairyMate
         </a>
 
-        {/* Zone 2: Clean single-line text navigation links */}
+        {/* Clean single-line navigation links (Desktop) */}
         <nav
           aria-label="Primary Navigation"
           className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600"
@@ -306,227 +340,222 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Zone 3: 1 primary action */}
-        <div className="flex items-center shrink-0">
-          <button
-            type="button"
-            onClick={() => handleQuickMarkToday('purchased')}
-            className="min-h-[40px] px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors whitespace-nowrap shrink-0"
-          >
-            Mark Today Purchased
-          </button>
+        {/* Right indicator: active vendor & rate */}
+        <div className="flex items-center gap-1 text-xs text-slate-500 font-mono tabular-nums min-w-0 max-w-[200px] sm:max-w-none">
+          <span className="truncate">{settings.vendorName}</span>
+          <span aria-hidden="true" className="shrink-0">·</span>
+          <span className="whitespace-nowrap shrink-0">
+            {settings.currencySymbol}
+            {settings.defaultPricePerLiter}/L
+          </span>
         </div>
       </header>
 
       {/* Main Content Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 pt-5 space-y-6">
-        {/* Today's Quick Attendance Banner (Android One-Handed Quick Action Bar) */}
-        <section
-          aria-label="Today's Milk Attendance Quick Action"
-          className="bg-white border border-slate-200 rounded-2xl p-4 sm:px-6 sm:py-4 flex flex-wrap items-center justify-between gap-4 shadow-xs"
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                todayStatus === 'purchased'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : todayStatus === 'absent'
-                  ? 'bg-rose-100 text-rose-700'
-                  : 'bg-slate-100 text-slate-700'
-              }`}
-            >
-              <Milk className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                <span>Today (Nov 11, 2026)</span>
-                <span aria-hidden="true">·</span>
-                <span>{settings.vendorName}</span>
-                <span aria-hidden="true">·</span>
-                <span className="font-mono tabular-nums">
-                  {settings.currencySymbol}
-                  {settings.defaultPricePerLiter}/L
-                </span>
-              </div>
-              <h1 className="text-sm sm:text-base font-bold text-slate-900 mt-0.5">
-                {todayStatus === 'purchased' && todayRecord ? (
-                  <>
-                    Today Marked{' '}
-                    <span className="text-emerald-700">Purchased (Present)</span> —{' '}
-                    <span className="font-mono tabular-nums">
-                      {calculateRecordTotalLiters(todayRecord)}L (
-                      {settings.currencySymbol}
-                      {calculateRecordTotalCost(todayRecord).toFixed(2)})
-                    </span>
-                  </>
-                ) : todayStatus === 'absent' ? (
-                  <>
-                    Today Marked <span className="text-rose-700">Absent (Skipped)</span> —{' '}
-                    <span className="font-mono tabular-nums">{settings.currencySymbol}0.00</span>
-                  </>
-                ) : (
-                  <>Today&apos;s Milk Attendance is Unmarked</>
-                )}
-              </h1>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => handleQuickMarkToday('purchased')}
-              className={`flex-1 sm:flex-initial min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors whitespace-nowrap shrink-0 ${
-                todayStatus === 'purchased'
-                  ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100'
-              }`}
-            >
-              <Check className="w-4 h-4 stroke-[2.5]" />
-              <span>Milk Purchased Today</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickMarkToday('absent')}
-              className={`flex-1 sm:flex-initial min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors whitespace-nowrap shrink-0 ${
-                todayStatus === 'absent'
-                  ? 'bg-rose-600 text-white border-rose-600'
-                  : 'bg-rose-50 text-rose-900 border-rose-200 hover:bg-rose-100'
-              }`}
-            >
-              <X className="w-4 h-4 stroke-[2.5]" />
-              <span>Absent Today</span>
-            </button>
-          </div>
-        </section>
-
-        {/* 4-Column Monthly KPI Summary Strip */}
-        <section
-          aria-label="Monthly Milk & Attendance Metrics"
-          className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
-        >
-          {/* Metric 1: Purchased Days */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-              <span>Purchased Days</span>
-              <CalendarCheck className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span
-                data-testid="kpi-purchased-days"
-                className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-emerald-700"
-              >
-                {summary.purchasedDays}
-              </span>
-              <span className="text-xs text-slate-500 font-mono tabular-nums">
-                / {summary.totalDaysInMonth} days
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 font-mono tabular-nums">
-              {summary.attendanceRatePercent}% attendance rate
-            </p>
-          </div>
-
-          {/* Metric 2: Absent Days */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-              <span>Absent Days</span>
-              <CalendarX className="w-4 h-4 text-rose-600" />
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span
-                data-testid="kpi-absent-days"
-                className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-rose-700"
-              >
-                {summary.absentDays}
-              </span>
-              <span className="text-xs text-slate-500">skipped</span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 font-mono tabular-nums">
-              Saved {settings.currencySymbol}
-              {summary.savedOnAbsentDaysCost.toFixed(0)} on absent days
-            </p>
-          </div>
-
-          {/* Metric 3: Total Milk Quantity */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-              <span>Total Milk Quantity</span>
-              <Milk className="w-4 h-4 text-sky-600" />
-            </div>
-            <div className="mt-2 flex items-baseline gap-1.5">
-              <span
-                data-testid="kpi-total-liters"
-                className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900"
-              >
-                {summary.totalLiters}
-              </span>
-              <span className="text-xs font-semibold text-slate-500">Liters</span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 font-mono tabular-nums">
-              {summary.totalMorningLiters}L Morn · {summary.totalEveningLiters}L Eve
-            </p>
-          </div>
-
-          {/* Metric 4: Total Payable Bill */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-            <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-              <span>Total {monthLabel.split(' ')[0]} Bill</span>
-              <Calculator className="w-4 h-4 text-slate-700" />
-            </div>
-            <div className="mt-2 flex items-baseline gap-1">
-              <span
-                data-testid="kpi-total-bill"
-                className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900"
-              >
-                {settings.currencySymbol}
-                {summary.grandTotalCost.toFixed(0)}
-              </span>
-              <span className="text-xs text-slate-500 font-mono tabular-nums">
-                @ {settings.currencySymbol}
-                {settings.defaultPricePerLiter}/L
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 font-mono tabular-nums">
-              Milk {settings.currencySymbol}
-              {summary.totalMilkCost.toFixed(0)}
-              {summary.totalExtraCost > 0
-                ? ` + Extra ${settings.currencySymbol}${summary.totalExtraCost.toFixed(0)}`
-                : ''}
-            </p>
-          </div>
-        </section>
-
         {/* Active Workspace View */}
         {activeTab === 'attendance' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-8">
-              <AttendanceCalendar
-                year={currentYear}
-                month={currentMonth}
-                monthLabel={monthLabel}
-                cells={calendarCells}
-                selectedDate={selectedDate}
-                quickMode={quickMode}
-                settings={settings}
-                onPrevMonth={handlePrevMonth}
-                onNextMonth={handleNextMonth}
-                onSelectDate={handleSelectDateOnCalendar}
-                onQuickModeChange={setQuickMode}
-                onMarkAllUpToToday={handleMarkAllUpToToday}
-              />
-            </div>
+          <>
+            {/* Today's Quick Attendance Banner */}
+            <section
+              aria-label="Today's Milk Attendance Quick Action"
+              className="bg-white border border-slate-200 rounded-2xl p-4 sm:px-6 sm:py-4 flex flex-wrap items-center justify-between gap-4 shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                    todayStatus === 'purchased'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : todayStatus === 'absent'
+                      ? 'bg-rose-100 text-rose-700'
+                      : 'bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  <Milk className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">
+                    Today · {todayInfo.formattedLabel}
+                  </div>
+                  <h1 className="text-sm sm:text-base font-bold text-slate-900 mt-0.5">
+                    {todayStatus === 'purchased' && todayRecord ? (
+                      <>
+                        Today Marked{' '}
+                        <span className="text-emerald-700">Purchased (Present)</span> —{' '}
+                        <span className="font-mono tabular-nums">
+                          {calculateRecordTotalLiters(todayRecord)}L (
+                          {settings.currencySymbol}
+                          {calculateRecordTotalCost(todayRecord).toFixed(2)})
+                        </span>
+                      </>
+                    ) : todayStatus === 'absent' ? (
+                      <>
+                        Today Marked <span className="text-rose-700">Absent (Skipped)</span> —{' '}
+                        <span className="font-mono tabular-nums">{settings.currencySymbol}0.00</span>
+                      </>
+                    ) : (
+                      <>Today&apos;s Milk Attendance is Unmarked</>
+                    )}
+                  </h1>
+                </div>
+              </div>
 
-            <div className="lg:col-span-4">
-              <DayAttendanceEditor
-                selectedDate={selectedDate}
-                record={recordsMap[selectedDate]}
-                settings={settings}
-                onSaveRecord={handleSaveRecord}
-                onClearRecord={handleClearRecord}
-              />
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => handleQuickMarkToday('purchased')}
+                  className={`flex-1 sm:flex-initial min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors whitespace-nowrap shrink-0 ${
+                    todayStatus === 'purchased'
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'bg-emerald-50 text-emerald-900 border-emerald-200 hover:bg-emerald-100'
+                  }`}
+                >
+                  <Check className="w-4 h-4 stroke-[2.5]" />
+                  <span>Milk Purchased Today</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleQuickMarkToday('absent')}
+                  className={`flex-1 sm:flex-initial min-h-[44px] px-4 py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors whitespace-nowrap shrink-0 ${
+                    todayStatus === 'absent'
+                      ? 'bg-rose-600 text-white border-rose-600'
+                      : 'bg-rose-50 text-rose-900 border-rose-200 hover:bg-rose-100'
+                  }`}
+                >
+                  <X className="w-4 h-4 stroke-[2.5]" />
+                  <span>Absent Today</span>
+                </button>
+              </div>
+            </section>
+
+            {/* 4-Column Monthly KPI Summary Strip */}
+            <section
+              aria-label="Monthly Milk & Attendance Metrics"
+              className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
+            >
+              {/* Metric 1: Purchased Days */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+                  <span>Purchased Days</span>
+                  <CalendarCheck className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span
+                    data-testid="kpi-purchased-days"
+                    className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-emerald-700"
+                  >
+                    {summary.purchasedDays}
+                  </span>
+                  <span className="text-xs text-slate-500 font-mono tabular-nums">
+                    / {summary.totalDaysInMonth} days
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 font-mono tabular-nums">
+                  {summary.attendanceRatePercent}% attendance rate
+                </p>
+              </div>
+
+              {/* Metric 2: Absent Days */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+                  <span>Absent Days</span>
+                  <CalendarX className="w-4 h-4 text-rose-600" />
+                </div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span
+                    data-testid="kpi-absent-days"
+                    className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-rose-700"
+                  >
+                    {summary.absentDays}
+                  </span>
+                  <span className="text-xs text-slate-500">skipped</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 font-mono tabular-nums">
+                  Saved {settings.currencySymbol}
+                  {summary.savedOnAbsentDaysCost.toFixed(0)} on absent days
+                </p>
+              </div>
+
+              {/* Metric 3: Total Milk Quantity */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+                  <span>Total Milk Quantity</span>
+                  <Milk className="w-4 h-4 text-sky-600" />
+                </div>
+                <div className="mt-2 flex items-baseline gap-1.5">
+                  <span
+                    data-testid="kpi-total-liters"
+                    className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900"
+                  >
+                    {summary.totalLiters}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500">Liters</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 font-mono tabular-nums">
+                  {summary.totalMorningLiters}L Morn · {summary.totalEveningLiters}L Eve
+                </p>
+              </div>
+
+              {/* Metric 4: Total Payable Bill */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+                  <span>Total {monthLabel.split(' ')[0]} Bill</span>
+                  <Calculator className="w-4 h-4 text-slate-700" />
+                </div>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span
+                    data-testid="kpi-total-bill"
+                    className="text-2xl sm:text-3xl font-bold font-mono tabular-nums text-slate-900"
+                  >
+                    {settings.currencySymbol}
+                    {summary.grandTotalCost.toFixed(0)}
+                  </span>
+                  <span className="text-xs text-slate-500 font-mono tabular-nums">
+                    @ {settings.currencySymbol}
+                    {settings.defaultPricePerLiter}/L
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 font-mono tabular-nums">
+                  Milk {settings.currencySymbol}
+                  {summary.totalMilkCost.toFixed(0)}
+                  {summary.totalExtraCost > 0
+                    ? ` + Extra ${settings.currencySymbol}${summary.totalExtraCost.toFixed(0)}`
+                    : ''}
+                </p>
+              </div>
+            </section>
+
+            {/* Calendar + Day Editor */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-8">
+                <AttendanceCalendar
+                  year={currentYear}
+                  month={currentMonth}
+                  monthLabel={monthLabel}
+                  cells={calendarCells}
+                  selectedDate={selectedDate}
+                  quickMode={quickMode}
+                  settings={settings}
+                  onPrevMonth={handlePrevMonth}
+                  onNextMonth={handleNextMonth}
+                  onSelectDate={handleSelectDateOnCalendar}
+                  onQuickModeChange={setQuickMode}
+                  onMarkAllUpToToday={handleMarkAllUpToToday}
+                />
+              </div>
+
+              <div className="lg:col-span-4">
+                <DayAttendanceEditor
+                  selectedDate={selectedDate}
+                  record={recordsMap[selectedDate]}
+                  settings={settings}
+                  onSaveRecord={handleSaveRecord}
+                  onClearRecord={handleClearRecord}
+                />
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         {activeTab === 'ledger' && (

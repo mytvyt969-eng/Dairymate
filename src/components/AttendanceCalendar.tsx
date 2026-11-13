@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, ChevronLeft, ChevronRight, Sun, Moon, RotateCcw } from 'lucide-react';
+import { Check, X, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import {
   AttendanceStatus,
   CalendarCell,
@@ -47,10 +47,10 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
         <div>
           <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-            {monthLabel} Attendance
+            Attendance Calendar
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Tap any date to inspect or toggle milk purchased vs. absent status
+            Tap any date to inspect or mark milk purchased vs. absent
           </p>
         </div>
 
@@ -268,10 +268,6 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
             <RotateCcw className="w-3.5 h-3.5" />
             Unmarked
           </span>
-        </div>
-
-        <div className="text-xs text-slate-500 font-mono tabular-nums">
-          Standard Rate: {settings.currencySymbol}{settings.defaultPricePerLiter}/L
         </div>
       </div>
     </section>

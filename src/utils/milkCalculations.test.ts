@@ -4,6 +4,8 @@ import {
   MilkSettings,
   MilkRecord,
   formatDateKey,
+  getTodayDateInfo,
+  getMaxFillDayForMonth,
   calculateRecordTotalLiters,
   calculateRecordMilkCost,
   calculateRecordTotalCost,
@@ -27,6 +29,24 @@ const mockSettings: MilkSettings = {
 test('formatDateKey formats year, 0-indexed month, and day to YYYY-MM-DD', () => {
   assert.equal(formatDateKey(2026, 10, 5), '2026-11-05');
   assert.equal(formatDateKey(2026, 0, 19), '2026-01-19');
+});
+
+test('getTodayDateInfo extracts live date parts and formatted label', () => {
+  const sampleDate = new Date(2026, 10, 13, 8, 46, 0); // Nov 13, 2026
+  const info = getTodayDateInfo(sampleDate);
+  assert.equal(info.year, 2026);
+  assert.equal(info.month, 10);
+  assert.equal(info.day, 13);
+  assert.equal(info.dateKey, '2026-11-13');
+  assert.equal(info.formattedLabel, 'Nov 13, 2026');
+});
+
+test('getMaxFillDayForMonth returns today day for current month, full days for past months, and 0 for future months', () => {
+  const today = getTodayDateInfo(new Date(2026, 10, 13)); // Nov 13, 2026
+  assert.equal(getMaxFillDayForMonth(2026, 10, today), 13);
+  assert.equal(getMaxFillDayForMonth(2026, 9, today), 31); // Oct 2026
+  assert.equal(getMaxFillDayForMonth(2026, 11, today), 0); // Dec 2026
+  assert.equal(getMaxFillDayForMonth(2027, 0, today), 0); // Jan 2027
 });
 
 test('calculateRecordTotalLiters and cost return 0 when status is absent or unmarked', () => {
@@ -92,6 +112,13 @@ test('calculateMonthlySummary aggregates purchased days, absent days, liters, an
 
   // Saved on 3 absent days: 3 * (1.5 + 0.5) * 64 = 384
   assert.equal(summary.savedOnAbsentDaysCost, 384);
+});
+
+test('createInitialSeedData respects maxDay cap', () => {
+  const seed = createInitialSeedData(2026, 10, mockSettings, 5);
+  assert.equal(Object.keys(seed).length, 5);
+  assert.ok(seed['2026-11-05']);
+  assert.equal(seed['2026-11-06'], undefined);
 });
 
 test('buildCalendarGrid builds 35 or 42 cells and marks current month days accurately', () => {
